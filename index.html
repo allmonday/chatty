@@ -116,6 +116,8 @@
             render: function (options) {
                 var that = this;
                 if(options.id) {
+                    // create user object at this
+                    // for delete's sake
                     that.user = new User({id: options.id});
                     that.user.fetch({
                         success: function (user) {
@@ -135,7 +137,6 @@
             saveUser: function(ev){
                 var userDetails = $(ev.currentTarget).serializeObject();
                 var user = new User();
-                // if (user.id) }
                 user.save(userDetails, {
                     success: function (user) {
                         router.navigate('', {trigger: true});
@@ -144,6 +145,7 @@
                 return false;
             },
             deleteUser: function (ev) {
+                // when render template, this owns the user attribute
                 this.user.destroy({
                     success: function () {
                         router.navigate('', {trigger: true}) 
