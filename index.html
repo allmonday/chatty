@@ -9,9 +9,22 @@
 <body>
     <div class="container">
         <h1>user manager</h1>
+        <button class="btn btn-danger log-out">Logout</button>
         <hr />
         <div class="page"></div>
     </div>
+
+    <script type="text/template" id="user-login-template">
+        <form class="form user-login-form" role="form">
+            <div class="form-group">
+                <label for="">username</label>
+                <input type="text" name="username" class="form-control">
+                <label for="">password</label>
+                <input type="password" name="password" class="form-control">
+                <button type="submit" class="btn btn-primary" style="margin-top: 10px;">Submit</button>
+            </div>
+        </form>
+    </script>
 
     <script type="text/template" id="user-list-template">
         <a href="#/new" class="btn btn-primary"> new user</a>
@@ -64,10 +77,17 @@
     <script src="./bower_components/jquery/dist/jquery.js"></script>
     <script src="./bower_components/underscore/underscore.js"></script>
     <script src="./bower_components/backbone/backbone.js"></script>
-    <script>
+    <script src="https://leancloud.cn/scripts/lib/av-0.4.5.min.js"></script>
 
-        $.ajaxPrefilter(function (options, originalOptions, jqXHR) {
-            options.url = "http://backbonejs-beginner.herokuapp.com" + options.url;
+    <script>
+        AV.initialize("vn760xm7035c9brt6dph1uz2z8xogbksaj3krb9u1xrnqdq9", "tfqrofvci4tp5bkgov95w3656beh9r3fs03adhnyt33dv00p");
+
+        $(function () {
+            $('.log-out').click(function () {
+                AV.User.logOut(); 
+                console.log('logout');
+                router.navigate('', {trigger: true});
+            })
         })
 
         $.fn.serializeObject = function() {
@@ -87,16 +107,40 @@
         };
 
 
-        var Users = Backbone.Collection.extend({
-            url: '/users'
-        });
+        var UserList = AV.Object.extend("UserList");
 
-        var User = Backbone.Model.extend({
-            urlRoot: '/users'
-        });
+        var Users = AV.Collection.extend({
+          model: UserList
+        });;
 
 
+        // ------------------------------------------------------------------------------------------
         // VIEW
+        var UserLogin = Backbone.View.extend({
+            el: '.page',
+            render: function() {
+                var template = _.template($('#user-login-template').html())();
+                this.$el.html(template);
+            },
+            events: {
+                'submit .user-login-form': 'doLogin'
+            },
+            doLogin: function (ev) {
+                var userInfo = $(ev.currentTarget).serializeObject();
+                console.log(userInfo);
+                AV.User.logIn(userInfo.username, userInfo.password, {
+                    success: function() {
+                        console.log('login success');
+                        router.navigate('list', {trigger: true})
+                    },
+                    error: function () {
+                        console.log('failed');
+                    }
+                })
+                return false;
+            }
+        });
+
         var UserList = Backbone.View.extend({
             el: '.page',
             render: function () {
@@ -116,34 +160,47 @@
             render: function (options) {
                 var that = this;
                 if(options.id) {
-                    // create user object at this
-                    // for delete's sake
-                    that.user = new User({id: options.id});
-                    that.user.fetch({
+                    var UserList = AV.Object.extend("UserList");
+                    var query = new AV.Query(UserList);
+                    query.get(options.id , {
                         success: function (user) {
+                            that.user = user;
                             var template = _.template($('#edit-user-template').html())({user: user})
                             that.$el.html(template);
                         }
-                    });
+                    })
+
                 } else {
                     var template = _.template($('#edit-user-template').html())({user: null})
                     this.$el.html(template);
                 }
             },
+            
             events: {
                 'submit .edit-user-form' : 'saveUser',
                 'click .delete': 'deleteUser'
             },
+
             saveUser: function(ev){
                 var userDetails = $(ev.currentTarget).serializeObject();
-                var user = new User();
-                user.save(userDetails, {
+                var UserList = AV.Object.extend("UserList");
+                userDetails.age = +userDetails.age;
+
+                var UserList = AV.Object.extend('UserList');
+                var userlist = new UserList();
+                userlist.save(userDetails, {
                     success: function (user) {
+                        console.log(user);
                         router.navigate('', {trigger: true});
+                    },
+                    error: function (err) {
+                        console.log('err', err)
                     }
+
                 })
                 return false;
             },
+
             deleteUser: function (ev) {
                 // when render template, this owns the user attribute
                 this.user.destroy({
@@ -151,25 +208,34 @@
                         router.navigate('', {trigger: true}) 
                     }
                 })
-                console.log('try to delete');
-                console.log(this.user);
                 return false;
             }
         })
 
         var Router = Backbone.Router.extend({
             routes: {
-                '': 'home',
+                '': 'login',
+                'list': 'home',
                 'new': 'editUser',
                 'edit/:id': 'editUser'
             }
         });
 
+        // ------------------------------------------------------------------------------------------
+
         // INSTANCE
+        var userLogin = new UserLogin();
         var userList = new UserList();
         var editUser = new EditUser();
         var router = new Router();
 
+        router.on('route:login', function () {
+            if (AV.User.current()) {
+                router.navigate('list', {trigger: true});
+            } else {
+                userLogin.render();
+            }
+        })
         router.on('route:home', function () {
             userList.render();
         })
